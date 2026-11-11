@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: consumer
-          image: netopskube-ipfix-consumer:1.0.0
+          image: ghcr.io/cspdevlabs/nok-ipfix-consumer:v1.0.0
           imagePullPolicy: IfNotPresent
 
           env:
