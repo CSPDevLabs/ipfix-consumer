@@ -23,14 +23,12 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        working-directory: ipfix-consumer
         run: |
           python -m pip install --upgrade pip
           pip install -r consumer/requirements.txt
           pip install pytest
 
       - name: Run IPFIX consumer unit tests
-        working-directory: ipfix-consumer
         run: |
           python -m pytest -v tests/test_consumer_unit.py
 
@@ -73,8 +71,8 @@ jobs:
       - name: Build and push IPFIX consumer Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ./ipfix-consumer/consumer
-          file: ./ipfix-consumer/consumer/Dockerfile
+          context: ./consumer
+          file: ./consumer/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: ${{ steps.meta.outputs.tags }}
