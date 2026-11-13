@@ -128,43 +128,44 @@ flowchart TD
 ```text
 ipfix-consumer/
 │
-├── .github/
-│   └── workflows/
-│       └──                  # GitHub Actions workflows
+├── README.md
+├── clusters.conf
 │
 ├── consumer/
-│   ├── consumer.py          # Main Python consumer
-│   ├── Dockerfile           # Consumer container image
-│   ├── deployment.yaml      # Kubernetes deployment
-│   └── requirements.txt     # Python dependencies
+│   ├── Dockerfile
+│   ├── consumer.py
+│   ├── deployment.yaml
+│   └── requirements.txt
 │
 ├── goflow/
+│   ├── namespace.yaml
 │   └── templates/
 │       ├── deployment.yaml.tmpl
 │       └── service.yaml.tmpl
 │
+├── health-check/
+│   ├── healthcheck.sh
+│   └── logs.sh
+│
 ├── kafka/
+│   ├── service.yaml
+│   ├── statefulset.yaml
+│   ├── topic-ipfix-dlq.yaml
 │   └── templates/
 │       └── topic-job.yaml.tmpl
 │
 ├── postgres/
-│   ├── postgres.yaml
-│   ├── postgres-secret.yaml
+│   ├── headless-service.yaml
 │   ├── postgres-schema.yaml
-│   └──                    # Supporting PostgreSQL resources
-│
-├── health-check/
-│   └──                    # Component health-check scripts
+│   ├── postgres-secret.yaml
+│   ├── service.yaml
+│   └── statefulset.yaml
 │
 ├── scripts/
 │   └── generate-ipfix-manifests.sh
 │
-├── tests/
-│   └── test_consumer_unit.py
-│
-├── clusters.conf           # Network cluster configuration
-│
-└── README.md
+└── tests/
+    └── test_consumer_unit.py
 ```
 
 ---
@@ -800,7 +801,7 @@ bng-1|172.18.0.104|3
 Once the configuration is ready, execute:
 
 ```bash
-make deploy-ipfix
+make deploy-ipfix CLUSTER_ID=<cluster-id>
 ```
 
 **That's it!** A single Make target deploys the complete base IPFIX pipeline.
@@ -915,7 +916,7 @@ The overall deployment sequence is:
 make try-nok
 
 # 2. Deploy the shared IPFIX infrastructure
-make deploy-ipfix
+make deploy-ipfix CLUSTER_ID=<cluster-id>
 
 # 3. Verify IPFIX deployment
 make status-ipfix
@@ -923,8 +924,6 @@ make status-ipfix
 # 4. Deploy and integrate the required network stacks
 #    using their respective NetOpsKube deployment targets.
 ```
-
-BNG and DIA can be deployed independently, and both can use the same base IPFIX infrastructure.
 
 **Important:** The base IPFIX deployment should be completed before integrating network stacks that depend on its collectors and Kafka topics. There is no need to redeploy the shared Kafka, PostgreSQL or Python consumer infrastructure separately for every network stack.
 
