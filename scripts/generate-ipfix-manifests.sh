@@ -3,6 +3,14 @@
 # ==============================================================================
 # GoFlow2 & Kafka Manifest Generator
 #
+# Generates cluster-specific GoFlow2 and Kafka manifests using clusters.conf.
+#
+# - Generates manifests for newly configured clusters.
+# - Preserves existing manifests without modification or recreation.
+# - Regenerates missing manifests for clusters still present in the config.
+# - Warns about existing manifests whose clusters are no longer configured.
+# - Never automatically deletes existing manifests.
+#
 # Configuration (clusters.conf):
 #   cluster_id|load_balancer_ip|kafka_partitions
 #
@@ -47,6 +55,10 @@ success() {
     printf '[SUCCESS] %s\n' "$*"
 }
 
+warning() {
+    printf '[WARNING] %s\n' "$*" >&2
+}
+
 error() {
     printf '[ERROR] %s\n' "$*" >&2
 }
@@ -55,7 +67,6 @@ die() {
     error "$*"
     exit 1
 }
-
 
 # ------------------------------------------------------------------------------
 # Validation
@@ -129,7 +140,6 @@ validate_template() {
     [[ -f "$1" && -r "$1" ]] || die "Template missing or unreadable: $1"
 }
 
-
 # ------------------------------------------------------------------------------
 # Template rendering
 # ------------------------------------------------------------------------------
@@ -166,6 +176,36 @@ render_template() {
     fi
 
     printf '%s\n' "$content" > "$output_file"
+}
+
+# ------------------------------------------------------------------------------
+# Generate manifest only when it does not already exist.
+# ------------------------------------------------------------------------------
+
+generate_if_missing() {
+    local template_file="$1"
+    local output_file="$2"
+    local cluster_id="$3"
+    local topic="$4"
+    local goflow_name="$5"
+    local load_balancer_ip="$6"
+    local kafka_partitions="$7"
+
+    if [[ -f "$output_file" ]]; then
+        log "Manifest already exists. Skipping without modification: $(basename "$output_file")"
+        return 0
+    fi
+
+    render_template \
+        "$template_file" \
+        "$output_file" \
+        "$cluster_id" \
+        "$topic" \
+        "$goflow_name" \
+        "$load_balancer_ip" \
+        "$kafka_partitions"
+
+    success "Generated manifest: $(basename "$output_file")"
 }
 
 # ------------------------------------------------------------------------------
@@ -280,6 +320,7 @@ main() {
 
     # --------------------------------------------------------------------------
     # Generate manifests.
+    # Existing manifests are preserved without modification.
     # --------------------------------------------------------------------------
 
     local topic
@@ -302,31 +343,31 @@ main() {
         service_file="${GOFLOW_OUTPUT_DIR}/service-${cluster_id}.yaml"
         topic_file="${KAFKA_OUTPUT_DIR}/topic-${topic}.yaml"
 
-        log "Generating manifests for cluster: ${cluster_id}"
+        log "Processing manifests for cluster: ${cluster_id}"
 
-        render_template \
+        generate_if_missing \
             "${GOFLOW_TEMPLATE_DIR}/deployment.yaml.tmpl" \
             "$deployment_file" \
             "$cluster_id" "$topic" "$goflow_name" "$load_balancer_ip" \
             "$kafka_partitions"
 
-        render_template \
+        generate_if_missing \
             "${GOFLOW_TEMPLATE_DIR}/service.yaml.tmpl" \
             "$service_file" \
             "$cluster_id" "$topic" "$goflow_name" "$load_balancer_ip" \
             "$kafka_partitions"
 
-        render_template \
+        generate_if_missing \
             "${KAFKA_TEMPLATE_DIR}/topic-job.yaml.tmpl" \
             "$topic_file" \
             "$cluster_id" "$topic" "$goflow_name" "$load_balancer_ip" \
             "$kafka_partitions"
 
-        success "Generated manifests for ${cluster_id}"
     done
 
     # --------------------------------------------------------------------------
-    # Remove stale generated files belonging to this generator.
+    # Warn about manifests belonging to clusters absent from clusters.conf.
+    # Do not delete or modify these files.
     # --------------------------------------------------------------------------
 
     local file
@@ -343,7 +384,7 @@ main() {
         filename="$(basename "$file")"
 
         # DLQ topic is a permanent manifest, not a cluster-generated file.
-        # Never remove or modify it during stale-file cleanup.
+        # Never warn about or modify it.
         if [[ "$filename" == "topic-ipfix-dlq.yaml" ]]; then
             log "Preserving reserved DLQ manifest: ${filename}"
             continue
@@ -367,11 +408,9 @@ main() {
         esac
 
         if [[ -z "${seen_clusters[$cluster]+x}" ]]; then
-            rm -f -- "$file"
-            log "Removed stale generated file: ${filename}"
+            warning "Manifest '${filename}' exists, but cluster '${cluster}' is not configured in clusters.conf. Preserving the file."
         fi
     done
-
 
     # --------------------------------------------------------------------------
     # Summary
@@ -389,7 +428,7 @@ main() {
     echo "============================================================"
     echo ""
 
-    success "All manifests generated successfully"
+    success "Manifest generation completed successfully"
 }
 
 main "$@"
